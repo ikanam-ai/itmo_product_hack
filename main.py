@@ -1,5 +1,0 @@
-"""
-
-Hallo, meine liebe!
-
-"""
