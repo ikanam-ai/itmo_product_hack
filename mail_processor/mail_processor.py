@@ -168,14 +168,26 @@ def main():
     db_name = os.getenv("DB_NAME", "ai_hack")
 
     mongo_full_addr = f"mongodb://{mongo_addr}:{mongo_port}/"
+
     print("Connecting to MongoDB " + mongo_full_addr)
     mongo_client = pymongo.MongoClient(mongo_full_addr)
+
     db = mongo_client[db_name]
 
-    accounts = list(db[EMAIL_CREDENTIALS_COLLECTION].find())
-    if len(accounts) == 0:
-        print("Error: Can't find accounts")
-        return -1
+    while True:
+        try:
+            print("Retrieving email accounts")
+            accounts = list(db[EMAIL_CREDENTIALS_COLLECTION].find())
+            if len(accounts) != 0:
+                break
+        except Exception as e:
+            print("Error while retrieving accounts: " + str(e))
+
+        print("Error: Can't find accounts try later")
+        time.sleep(2)
+        continue
+
+    print(f"Running on {len(accounts)} email accounts")
 
     while True:
         # let's work with one account only
