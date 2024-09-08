@@ -1,5 +1,0 @@
-""""
-
-Some bot features
-
-""""

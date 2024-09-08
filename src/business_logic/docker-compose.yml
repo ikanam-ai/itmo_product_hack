@@ -1,0 +1,34 @@
+version: '3'
+services:
+
+    mongo:
+        image: mongodb/mongodb-community-server:latest
+        command: --dbpath=/db
+        volumes:
+            - ./db:/db
+        ports:
+            - "127.0.0.1:27017:27017"
+        container_name: ai_hack_db
+        deploy:
+            restart_policy:
+                condition: on-failure
+                delay: 2s
+
+    mail_worker:
+        build:
+            context: ./mail_processor
+            dockerfile: Dockerfile
+        image: mail_worker
+        volumes:
+            - ./mail_processor:/app
+        network_mode: host
+        container_name: mail_worker
+        deploy:
+            restart_policy:
+                condition: on-failure
+                delay: 5s
+
+networks:
+  host:
+    name: host
+    external: true
