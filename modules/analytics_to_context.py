@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from config import CONTEXT_TEMPLATE, PRODUCT_NAME_COLUMN, N
+from src.config import CONTEXT_TEMPLATE, PRODUCT_NAME_COLUMN, N
 
 
 class AnalyticsToContext:
