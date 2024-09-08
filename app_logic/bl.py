@@ -1,48 +1,71 @@
-import os, sys
+import os, sys, time
 import pymongo
+import client_utils
+import tg_utils
+import email_utils
+import ai_utils
 from bson.binary import Binary
-
-EMAIL_TO_SEND_COLLECTION = "send_email"
-EMAIL_TO_RECV_COLLECTION = "recv_email"
+from datetime import datetime
 
 
-def post_email(db, from_name, to_name, from_email, to_email, subject, plain_body=None, html_body=None,
-               attachment_data=None, attachment_name="no_name"):
-
-    collection = db[EMAIL_TO_SEND_COLLECTION]
-    email = {
-        "subject": subject,
-        "from": from_name,
-        "to": to_name,
-        "from_email": from_email,
-        "to_email": to_email,
-        "sent": False
-    }
-    if plain_body:
-        email["plain_part"] = plain_body
-    if html_body:
-        email["html_part"] = html_body
-    if attachment_data:
-        email["attachment"] = {
-            "data": attachment_data,
-            "file_name": attachment_name
-        }
-
-    if not plain_body and not html_body:
-        raise Exception("Email must have some body")
-
-    collection.insert_one(email)
+POLLING_INTERVAL = 5
+PRESENTATION_PATH = "./presentation.pdf"
+PRESENTATION_NAME = "presentation.pdf"
+OUR_NAME = "Rudolf The Advertiser"
+OUR_EMAIL = "dmitry.v.zhelobanov@yandex.ru"
 
 
-def retrieve_new_email(db):
-    collection = db[EMAIL_TO_RECV_COLLECTION]
-    return collection.find_one({"processed": False})
+def send_email(db, client, subject, msg, attachment_data=None, attachment_name=None):
+    email_utils.post_email(db, OUR_NAME, client["name"], OUR_EMAIL, client["email"], subject,
+                           html_body=msg, attachment_data=attachment_data, attachment_name=attachment_name)
+    client_utils.add_message(db, client, msg, "out", "email")
+    client_utils.mark_client_message_sent(db, client, "email")
 
 
-def mark_email_processed(db, email):
-    collection = db[EMAIL_TO_RECV_COLLECTION]
-    collection.update_one({"_id": email["_id"]},
-                          {"$set": {"processed": True}})
+def send_tg(db, client, msg, attachment_data=None, attachment_name=None):
+    tg_utils.post_message(db, client["tg_id"], msg, attachment_data=attachment_data, attachment_name=attachment_name)
+    client_utils.add_message(db, client, msg, "out", "tg")
+    client_utils.mark_client_message_sent(db, client, "tg")
+
+
+def execute_action(db, client, message, msg_type, msg_cls):
+    if msg_cls == ai_utils.TYPE_DND:
+        print("Client asked to DND")
+        client_utils.mark_client_do_not_disturb(db, client)
+    elif msg_cls == ai_utils.TYPE_DEMO_REQ:
+        print("Client asked for demo")
+        if msg_type == "email":
+            subject, msg = ai_utils.generate_demo_email(client["name"], client["company_name"], message)
+            send_email(db, client, subject, msg)
+        else:
+            msg = ai_utils.generate_demo_tg(client["name"], client["company_name"], message)
+            send_tg(db, client, msg)
+    elif msg_cls == ai_utils.TYPE_PRESENTATION_REQ:
+        print("Client asked for presentation")
+        with open(PRESENTATION_PATH, "rb") as fd:
+            data = Binary(fd.read())
+
+        if msg_type == "email":
+            subject, msg = ai_utils.generate_presentation_email(client["name"], client["company_name"], message,)
+            send_email(db, client, subject, msg, attachment_data=data, attachment_name=PRESENTATION_NAME)
+        else:
+            msg = ai_utils.generate_presentation_tg(client["name"], client["company_name"], message,)
+            send_tg(db, client, msg, attachment_data=data, attachment_name=PRESENTATION_NAME)
+    elif msg_cls == ai_utils.TYPE_MORE_INFO_REQ:
+        print("Client asked for more info")
+        if msg_type == "email":
+            subject, msg = ai_utils.generate_more_info_email(client["name"], client["company_name"], message)
+            send_email(db, client, subject, msg)
+        else:
+            msg = ai_utils.generate_more_info_tg(client["name"], client["company_name"], message)
+            send_tg(db, client, msg)
+    elif msg_cls == ai_utils.TYPE_TIMEOUT_REQ:
+        timeout = ai_utils.get_timeout_from_msg(message)
+        client_utils.mark_client_got_timeout(db, client, timeout)
+    elif msg_cls == ai_utils.TYPE_REDIRECT_REQ:
+        print("Automatic redirection is not implemented")
+    elif msg_cls == ai_utils.TYPE_UNKNOWN_REQ:
+        print("We have no Idea what the message is about. Manual processing?")
 
 
 def main():
@@ -55,19 +78,84 @@ def main():
     mongo_client = pymongo.MongoClient(mongo_full_addr)
     db = mongo_client[db_name]
 
-    # post_email(db, "me", "him", "dmitry.v.zhelobanov@yandex.ru", "dmitry.v.zhelobanov@yandex.ru", "plain_post",
-    #            plain_body="plain body")
-    post_email(db, "me", "him", "dmitry.v.zhelobanov@yandex.ru", "dmitry.v.zhelobanov@yandex.ru", "html_post",
-               html_body="<b>html body</b>")
+    while True:
+        print("Waiting for mongo connection")
+        try:
+            db[client_utils.CLIENTS_COLLECTION_NAME].count_documents({})
+            print("Connected")
+            break
+        except Exception as e:
+            time.sleep(POLLING_INTERVAL)
 
-    # with open(".env", "rb") as fd:
-    #     data = Binary(fd.read())
-    # post_email(db, "me", "him", "dmitry.v.zhelobanov@yandex.ru", "dmitry.v.zhelobanov@yandex.ru", "attachment_post",
-    #            html_body="<b>html body</b>", attachment_data=data, attachment_name="attached_file")
+    while True:
+        for client in client_utils.get_clients(db, status=client_utils.CLIENT_STATUS_NEW):
+            print("Found new client " + str(client))
+            sent_type = ""
+            if "email" in client:
+                subject, message = ai_utils.generate_incentive_email(client["name"], client["company_name"],
+                                                                     client["products_of_interest"])
+                send_email(db, client, subject, message)
+                sent_type = "email"
+            elif "tg_id" in client:
+                message = ai_utils.generate_incentive_tg_mail(client["name"], client["company_name"],
+                                                              client["products_of_interest"])
+                send_tg(db, client, message)
+                sent_type = "tg"
 
-    # email = retrieve_new_email(db)
-    # print(email)
-    # mark_email_processed(db, email)
+            print(sent_type, "was posted")
+
+        while True:
+            email = email_utils.retrieve_new_email(db)
+            if email is None:
+                break
+
+            print("Received email:", email)
+            client = client_utils.get_clients(db, email=email["from_email"])
+            if len(client) == 0:
+                print("Can't find client")
+                email_utils.mark_email_processed(db, email, "no client")
+
+            message = email["html_part"] if "html_part" in email else email["plain_part"]
+            email_cls = ai_utils.classify_email(message, email["subject"])
+            print("email class", email_cls)
+
+            client_utils.add_message(db, client, message, "in", "email")
+            email_utils.mark_email_processed(db, email, email_cls)
+
+            execute_action(db, client, message, "email", email_cls)
+
+        while True:
+            tg_msg = tg_utils.retrieve_new_tg_message(db)
+            if tg_msg is None:
+                break
+
+            print("Received tg_msg:", tg_msg)
+            client = client_utils.get_clients(db, tg_id=tg_msg["from"])
+            if len(client) == 0:
+                print("Can't find client")
+                tg_utils.mark_message_processed(db, tg_msg, "no client")
+
+            message = tg_msg["content"]
+            tg_cls = ai_utils.classify_tg_message(message)
+            print("tg message class", tg_cls)
+
+            client_utils.add_message(db, client, message, "in", "tg")
+            tg_utils.mark_message_processed(db, tg_msg, "ok")
+
+            execute_action(db, client, message, "tg", tg_cls)
+
+        timeoted_clients = client_utils.get_clients(status=client_utils.CLIENT_STATUS_TIMEOUT)
+        for client in timeoted_clients:
+            if "deadline" in client and datetime.now() < client["deadline"]:
+                print("Detected client with passed deadline. Let's remember him about us")
+                if "email" in client:
+                    subject, msg = ai_utils.generate_reminder_email(client["name"], client["company_name"])
+                    send_email(db, client, subject, msg)
+                elif "tg_id" in client:
+                    msg = ai_utils.generate_reminder_tg(client["name"], client["company_name"])
+                    send_tg(db, client, msg)
+
+        time.sleep(POLLING_INTERVAL)
 
 
 if __name__ == "__main__":
