@@ -1,13 +1,19 @@
+import imaplib
 import json
-import pymongo
-import sys, os, smtplib, ssl, imaplib, time
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
-from email.utils import formataddr, parseaddr
+import os
+import smtplib
+import ssl
+import sys
+import time
+import traceback
 from datetime import datetime, timezone
 from email import message_from_bytes
-import traceback
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import formataddr, parseaddr
+
+import pymongo
 
 # email structure:
 # optional html_part
@@ -50,8 +56,8 @@ def send_email(email, smtp_client):
         attachment = email["attachment"]
         fname = attachment["file_name"]
 
-        attachment_part = MIMEApplication(attachment["data"],  Name=fname)
-        attachment_part['Content-Disposition'] = 'attachment; filename="%s"' % fname
+        attachment_part = MIMEApplication(attachment["data"], Name=fname)
+        attachment_part["Content-Disposition"] = 'attachment; filename="%s"' % fname
         message.attach(attachment_part)
 
     message["Subject"] = email["subject"]
@@ -72,8 +78,11 @@ def send_emails(account, db):
     if len(emails) == 0:
         return
 
-    with smtplib.SMTP_SSL(account["smtp_server"], account["smtp_port"],
-                          context=ssl.create_default_context()) as smtp_client:
+    with smtplib.SMTP_SSL(
+        account["smtp_server"],
+        account["smtp_port"],
+        context=ssl.create_default_context(),
+    ) as smtp_client:
 
         smtp_client.login(account["login"], account["password"])
         for email in emails:
@@ -84,23 +93,29 @@ def send_emails(account, db):
                 to_update["status"] = "ok"
             except Exception as e:
                 to_update["status"] = "error: " + str(e)
-                print("Error: failed to send email with exception " + str(e) + " email id " + str(email["_id"]))
+                print(
+                    "Error: failed to send email with exception "
+                    + str(e)
+                    + " email id "
+                    + str(email["_id"])
+                )
 
             to_update["process_ts"] = datetime.now(tz=timezone.utc)
-            collection.update_one({"_id": email["_id"]},
-                                  {"$set": to_update})
+            collection.update_one({"_id": email["_id"]}, {"$set": to_update})
 
 
-def receive_emails(account, db, mailbox='inbox'):
+def receive_emails(account, db, mailbox="inbox"):
     print("Receiving emails for account " + account["name"])
     collection = db[EMAIL_TO_RECV_COLLECTION]
 
-    with imaplib.IMAP4_SSL(host=account["imap_server"], port=account["imap_port"]) as imap_client:
+    with imaplib.IMAP4_SSL(
+        host=account["imap_server"], port=account["imap_port"]
+    ) as imap_client:
         imap_client.login(account["login"], account["password"])
 
         imap_client.select(mailbox)
 
-        status, data = imap_client.search(None, 'ALL')
+        status, data = imap_client.search(None, "ALL")
         mail_ids = []
         for block in data:
             mail_ids += block.split()
@@ -108,7 +123,7 @@ def receive_emails(account, db, mailbox='inbox'):
         print(f"Found {len(mail_ids)} new emails")
 
         for m_id in mail_ids:
-            status, data = imap_client.fetch(m_id, '(RFC822)')
+            status, data = imap_client.fetch(m_id, "(RFC822)")
             for response_part in data:
                 if not isinstance(response_part, tuple):
                     continue
@@ -123,23 +138,23 @@ def receive_emails(account, db, mailbox='inbox'):
                     "from_email": from_addr[1],
                     "to": to_addr[0],
                     "to_email": to_addr[1],
-                    "subject": message["Subject"]
+                    "subject": message["Subject"],
                 }
                 if message.is_multipart():
-                    html_content = ''
-                    plain_content = ''
+                    html_content = ""
+                    plain_content = ""
                     attachment = None
 
                     for part in message.get_payload():
                         part_type = part.get_content_type()
-                        if part_type == 'text/plain':
+                        if part_type == "text/plain":
                             plain_content += part.get_payload()
-                        elif part_type == 'text/html':
+                        elif part_type == "text/html":
                             html_content += part.get_payload()
-                        elif part_type == 'application/octet-stream':
+                        elif part_type == "application/octet-stream":
                             attachment = {
                                 "data": part.get_payload(decode=True),
-                                "file_name": part.get_filename()
+                                "file_name": part.get_filename(),
                             }
                         else:
                             print("Warning: Unknown content type: " + str(part_type))
@@ -156,7 +171,7 @@ def receive_emails(account, db, mailbox='inbox'):
                 try:
                     collection.insert_one(new_email)
                     # delete email in the mailbox
-                    imap_client.store(m_id, '+FLAGS', '\\Deleted')
+                    imap_client.store(m_id, "+FLAGS", "\\Deleted")
 
                 except Exception as e:
                     print("Error while inserting new email: " + str(e))
@@ -194,10 +209,15 @@ def main():
         account = accounts[0]
 
         try:
-            receive_emails(account, db, mailbox='test')
+            receive_emails(account, db, mailbox="test")
             send_emails(account, db)
         except Exception as e:
-            print("Error: got exception in the main " + str(e) + "\nTrace:\n" + str(traceback.format_exc()))
+            print(
+                "Error: got exception in the main "
+                + str(e)
+                + "\nTrace:\n"
+                + str(traceback.format_exc())
+            )
 
         print("Going into sleep for " + str(POLLING_INTERVAL) + " seconds")
         time.sleep(POLLING_INTERVAL)
@@ -205,4 +225,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
