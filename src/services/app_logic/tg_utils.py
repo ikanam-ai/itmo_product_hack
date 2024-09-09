@@ -1,4 +1,3 @@
-
 def retrieve_new_tg_message(db):
     return None
 
