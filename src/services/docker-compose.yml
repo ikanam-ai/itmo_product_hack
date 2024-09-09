@@ -28,6 +28,20 @@ services:
                 condition: on-failure
                 delay: 5s
 
+    app_logic:
+        build:
+            context: ./app_logic
+            dockerfile: Dockerfile
+        image: app_logic
+        volumes:
+            - ./app_logic:/app
+        network_mode: host
+        container_name: app_Logic
+        deploy:
+            restart_policy:
+                condition: on-failure
+                delay: 5s
+
 networks:
   host:
     name: host
