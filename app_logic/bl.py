@@ -63,9 +63,11 @@ def execute_action(db, client, message, msg_type, msg_cls):
         timeout = ai_utils.get_timeout_from_msg(message)
         client_utils.mark_client_got_timeout(db, client, timeout)
     elif msg_cls == ai_utils.TYPE_REDIRECT_REQ:
-        print("Automatic redirection is not implemented")
+        print("Automatic redirection is not implemented!!!!!!")
+        client_utils.mark_client_redirected(db, client, "Unknown")
     elif msg_cls == ai_utils.TYPE_UNKNOWN_REQ:
         print("We have no Idea what the message is about. Manual processing?")
+        client_utils.mark_client_unknown_response(db, client, "Unknown")
 
 
 def main():
@@ -110,11 +112,12 @@ def main():
                 break
 
             print("Received email:", email)
-            client = client_utils.get_clients(db, email=email["from_email"])
-            if len(client) == 0:
+            clients = list(client_utils.get_clients(db, email=email["from_email"]))
+            if len(clients) == 0:
                 print("Can't find client")
                 email_utils.mark_email_processed(db, email, "no client")
 
+            client = clients[0]
             message = email["html_part"] if "html_part" in email else email["plain_part"]
             email_cls = ai_utils.classify_email(message, email["subject"])
             print("email class", email_cls)
@@ -130,11 +133,12 @@ def main():
                 break
 
             print("Received tg_msg:", tg_msg)
-            client = client_utils.get_clients(db, tg_id=tg_msg["from"])
-            if len(client) == 0:
+            clients = list(client_utils.get_clients(db, tg_id=tg_msg["from"]))
+            if len(clients) == 0:
                 print("Can't find client")
                 tg_utils.mark_message_processed(db, tg_msg, "no client")
 
+            client = clients[0]
             message = tg_msg["content"]
             tg_cls = ai_utils.classify_tg_message(message)
             print("tg message class", tg_cls)
@@ -144,9 +148,9 @@ def main():
 
             execute_action(db, client, message, "tg", tg_cls)
 
-        timeoted_clients = client_utils.get_clients(status=client_utils.CLIENT_STATUS_TIMEOUT)
+        timeoted_clients = client_utils.get_clients(db, status=client_utils.CLIENT_STATUS_TIMEOUT)
         for client in timeoted_clients:
-            if "deadline" in client and datetime.now() < client["deadline"]:
+            if "deadline" in client and datetime.now() > client["deadline"]:
                 print("Detected client with passed deadline. Let's remember him about us")
                 if "email" in client:
                     subject, msg = ai_utils.generate_reminder_email(client["name"], client["company_name"])

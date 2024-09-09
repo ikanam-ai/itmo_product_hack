@@ -7,6 +7,7 @@ CLIENT_STATUS_TIMEOUT = "timeout"
 CLIENT_STATUS_SENT = "sent"
 CLIENT_STATUS_REDIRECTED = "redirected"
 CLIENT_STATUS_DONT_DISTURB = "dont_disturb"
+CLIENT_STATUS_UNKNOWN = "unknown"
 
 
 def create_new_client(db, name, company_name, product_of_interest, email=None, tg_id=None):
@@ -43,7 +44,7 @@ def create_new_client(db, name, company_name, product_of_interest, email=None, t
     collection.insert_one(client_data)
 
 
-def get_clients(db, name=None, company_name=None, email=None, tg_id=None, status=None):
+def get_clients(db, name=None, company_name=None, email=None, tg_id=None, status=None, no_msg=False):
     query = {}
     if name:
         query["name"] = name
@@ -59,6 +60,9 @@ def get_clients(db, name=None, company_name=None, email=None, tg_id=None, status
     if len(query) == 0:
         raise Exception("Can't retrieve unspecified client")
 
+    if no_msg:
+        return db[CLIENTS_COLLECTION_NAME].find(query, {"messages": 0})
+
     return db[CLIENTS_COLLECTION_NAME].find(query)
 
 
@@ -66,7 +70,8 @@ def add_message(db, client, message, direction, msg_type):
     db[CLIENTS_COLLECTION_NAME].update_one({"_id": client["_id"]},
                                            {'$push': {"messages": {"content": message,
                                                                    "type": msg_type,
-                                                                   "direction": direction}}})
+                                                                   "direction": direction,
+                                                                   "ts": datetime.now(tz=timezone.utc)}}})
 
 
 def mark_client_got_timeout(db, client, deadline):
@@ -100,20 +105,41 @@ def mark_client_do_not_disturb(db, client):
                                                      "updated": datetime.now(tz=timezone.utc)}})
 
 
+def mark_client_redirected(db, client, to):
+    # add additional logic here
+    db[CLIENTS_COLLECTION_NAME].update_one({"_id": client["_id"]},
+                                           {"$set": {"status": CLIENT_STATUS_REDIRECTED,
+                                                     "to": to,
+                                                     "updated": datetime.now(tz=timezone.utc)}})
+
+
+def mark_client_unknown_response(db, client, to):
+    # add additional logic here
+    db[CLIENTS_COLLECTION_NAME].update_one({"_id": client["_id"]},
+                                           {"$set": {"status": CLIENT_STATUS_UNKNOWN,
+                                                     "to": to,
+                                                     "updated": datetime.now(tz=timezone.utc)}})
+
+
 if __name__ == "__main__":
     import pymongo
+    from bson import json_util
 
     parser = argparse.ArgumentParser(
         prog='ClientCLI',
         description='Client base command line utility')
-    parser.add_argument("cmd", choices=["add, get"])
-    parser.add_argument("--name", type=str, help="Client name", dafault=None)
-    parser.add_argument("--company_name", type=str, help="Company name", dafault=None)
-    parser.add_argument("--email", type=str, help="Client's email", dafault=None)
-    parser.add_argument("--tg_id", type=str, help="Client's Telegram ID", dafault=None)
-    parser.add_argument("--products", type=str, help=" Client's products of interest (you can set a list in quotes",
-                        default=None)
-    parser.add_argument("--status", help="Client's status", default=None)
+    parser.add_argument("cmd", choices=["add", "get"])
+    parser.add_argument("--name", type=str, help="Client name")
+    parser.add_argument("--company_name", type=str, help="Company name")
+    parser.add_argument("--email", type=str, help="Client's email")
+    parser.add_argument("--tg_id", type=str, help="Client's Telegram ID")
+    parser.add_argument("--products", type=str, help=" Client's products of interest (you can set a list in quotes")
+    parser.add_argument("--status", type=str, help="Client's status",
+                        choices=[CLIENT_STATUS_NEW, CLIENT_STATUS_TIMEOUT, CLIENT_STATUS_SENT, CLIENT_STATUS_REDIRECTED,
+                                 CLIENT_STATUS_DONT_DISTURB, CLIENT_STATUS_UNKNOWN])
+    parser.add_argument("--no_msg", action='store_true')
+
+    args = parser.parse_args()
 
     mongo_addr = os.getenv("MONGO_HOST", "localhost")
     mongo_port = os.getenv("MONGO_PORT", "27017")
@@ -126,13 +152,13 @@ if __name__ == "__main__":
 
     db = mongo_client[db_name]
 
-    args = parser.parse_args()
     if args.cmd == "add":
         create_new_client(db, args.name, args.company_name, args.products, args.email, args.tg_id)
     elif args.cmd == "get":
         clients = get_clients(db, name=args.name, company_name=args.company_name, email=args.email,
-                              tg_id=args.tg_id, status=args.status)
-        if not clients or len(clients) == 0:
+                              tg_id=args.tg_id, status=args.status, no_msg=args.no_msg)
+        clients = list(clients)
+        if len(clients) == 0:
             print("Noting is found")
         else:
-            print(json.dumps(clients, indent=2))
+            print(json_util.dumps(clients, indent=2))
