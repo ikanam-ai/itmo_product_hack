@@ -38,6 +38,7 @@ async def send_message_to_id(id: str, text: str):
     await bot.send_message(chat_id=id, text=text)
 
 
+
 # Получение новых сообщений от пользователя и занесение их в БД
 # ___Должен вернуть from - id___
 def retrieve_new_tg_message(db):

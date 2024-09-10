@@ -8,6 +8,7 @@ from bson.binary import Binary
 from datetime import datetime
 
 
+
 POLLING_INTERVAL = 5
 PRESENTATION_PATH = "./presentation.pdf"
 PRESENTATION_NAME = "presentation.pdf"

@@ -40,6 +40,7 @@ def generate_more_info_email(name, company_name, message):
     return "More info", "Here we keep talking to the client"
 
 
+
 def generate_more_info_tg(name, company_name, message):
     return "Here we keep talking to the client"
 
