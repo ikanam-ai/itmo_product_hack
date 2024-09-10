@@ -14,6 +14,8 @@ def generate_incentive_email(name, company_name, products):
 
 
 def generate_incentive_tg_mail(name, company_name, products):
+    # Шлем инициативное письмо конкретному пользователю
+    # ___Нужен импорт функции для отправки конкретному пользователю из tg_utils___
     return "tg message"
 
 
@@ -21,6 +23,7 @@ def generate_demo_email(name, company_name, message):
     return "No demo today", "Demo is not provided!! Ho-Ho"
 
 
+# Пользователь попросил демо (письмо с данными для входа в демо)
 def generate_demo_tg(name, company_name, message):
     return "Demo is not provided!! HaHa"
 
@@ -41,6 +44,7 @@ def generate_more_info_tg(name, company_name, message):
     return "Here we keep talking to the client"
 
 
+# Логика с таймаутом
 def get_timeout_from_msg(message):
     return datetime.now()
 
@@ -58,4 +62,5 @@ def classify_email(message, subject):
 
 
 def classify_tg_message(message):
+    # Логика с классификацией сообщения (LLM)
     return TYPE_DND

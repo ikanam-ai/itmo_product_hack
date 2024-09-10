@@ -23,15 +23,21 @@ def send_email(db, client, subject, msg, attachment_data=None, attachment_name=N
 
 
 def send_tg(db, client, msg, attachment_data=None, attachment_name=None):
+    # Отсылаем сообщение пользователю ТГ
     tg_utils.post_message(db, client["tg_id"], msg, attachment_data=attachment_data, attachment_name=attachment_name)
+    # Обновление БД с новым сообщением
     client_utils.add_message(db, client, msg, "out", "tg")
+    # Пометка, что сообщение отправлено
     client_utils.mark_client_message_sent(db, client, "tg")
 
 
 def execute_action(db, client, message, msg_type, msg_cls):
+    # Пользователь попросил не беспокоить
     if msg_cls == ai_utils.TYPE_DND:
         print("Client asked to DND")
         client_utils.mark_client_do_not_disturb(db, client)
+
+    # Пользователь попросил демо (письмо с данными для входа в демо)
     elif msg_cls == ai_utils.TYPE_DEMO_REQ:
         print("Client asked for demo")
         if msg_type == "email":
@@ -78,6 +84,8 @@ def main():
     mongo_client = pymongo.MongoClient(mongo_full_addr)
     db = mongo_client[db_name]
 
+
+    # Подключение к БД
     while True:
         print("Waiting for mongo connection")
         try:
@@ -87,6 +95,8 @@ def main():
         except Exception as e:
             time.sleep(POLLING_INTERVAL)
 
+
+    # Цикл для отправки инициативного письма каждому новому клиенту
     while True:
         for client in client_utils.get_clients(db, status=client_utils.CLIENT_STATUS_NEW):
             print("Found new client " + str(client))
@@ -97,6 +107,7 @@ def main():
                 send_email(db, client, subject, message)
                 sent_type = "email"
             elif "tg_id" in client:
+                # ____Тут еще надо слать tg_id, чтобы мы написали конкретному пользователю____
                 message = ai_utils.generate_incentive_tg_mail(client["name"], client["company_name"],
                                                               client["products_of_interest"])
                 send_tg(db, client, message)
@@ -124,33 +135,45 @@ def main():
 
             execute_action(db, client, message, "email", email_cls)
 
+        # Цикл получения ответа от пользователя
         while True:
+            # Получение сообщения от пользователя
+            # ___Должен вернуть from - id___
             tg_msg = tg_utils.retrieve_new_tg_message(db)
             if tg_msg is None:
                 break
 
             print("Received tg_msg:", tg_msg)
+            # Ищем клиента, который отправил сообщение
             client = client_utils.get_clients(db, tg_id=tg_msg["from"])
             if len(client) == 0:
                 print("Can't find client")
+                # ___Тут еще логика с received или post, по идее в received надо заносить___
                 tg_utils.mark_message_processed(db, tg_msg, "no client")
 
+            # Если клиент существует, то достаем его content
             message = tg_msg["content"]
+            # Логика с классификацией сообщения
             tg_cls = ai_utils.classify_tg_message(message)
-            print("tg message class", tg_cls)
+            print("tg message class", tg_cls) # Выводим класс сообщения
 
+            # Обновляем БД, сообщение получено
             client_utils.add_message(db, client, message, "in", "tg")
+            # Отмечаем, что выполнено
             tg_utils.mark_message_processed(db, tg_msg, "ok")
 
+            # Логика с действием (что делать дальше)
             execute_action(db, client, message, "tg", tg_cls)
 
-        timeoted_clients = client_utils.get_clients(status=client_utils.CLIENT_STATUS_TIMEOUT)
+        #___Добавил bd как первый параметр___
+        timeoted_clients = client_utils.get_clients(db, status=client_utils.CLIENT_STATUS_TIMEOUT)
         for client in timeoted_clients:
             if "deadline" in client and datetime.now() < client["deadline"]:
                 print("Detected client with passed deadline. Let's remember him about us")
                 if "email" in client:
                     subject, msg = ai_utils.generate_reminder_email(client["name"], client["company_name"])
                     send_email(db, client, subject, msg)
+                # Логика с созданием письма позже
                 elif "tg_id" in client:
                     msg = ai_utils.generate_reminder_tg(client["name"], client["company_name"])
                     send_tg(db, client, msg)

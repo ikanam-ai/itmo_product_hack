@@ -31,26 +31,42 @@ services:
                 condition: on-failure
                 delay: 5s
 
-    telegram_bot:
+    app_logic:
         build:
-            context: ./telegram_bot
+            context: ./app_logic
             dockerfile: Dockerfile
-        image: telegram_bot
-        volumes:
-            - ./telegram_bot:/app
-        network_mode: host
-        container_name: telegram_bot
+        image: app_logic
         env_file:
             - .env
-        environment:
-            - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
-            - MONGO_HOST=localhost
-            - MONGO_PORT=27017
-            - DB_NAME=ai_hack
+        volumes:
+            - ./app_logic:/app
+        network_mode: host
+        container_name: app_Logic
         deploy:
             restart_policy:
                 condition: on-failure
                 delay: 5s
+
+#    telegram_bot:
+#        build:
+#            context: ./telegram_bot
+#            dockerfile: Dockerfile
+#        image: telegram_bot
+#        volumes:
+#            - ./telegram_bot:/app
+#        network_mode: host
+#        container_name: telegram_bot
+#        env_file:
+#            - .env
+#        environment:
+#            - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+#            - MONGO_HOST=localhost
+#            - MONGO_PORT=27017
+#            - DB_NAME=ai_hack
+#        deploy:
+#            restart_policy:
+#                condition: on-failure
+#                delay: 5s
 
 networks:
   host:
