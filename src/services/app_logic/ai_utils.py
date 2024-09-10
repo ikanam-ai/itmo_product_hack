@@ -13,6 +13,7 @@ TYPE_PRESENTATION_REQ = "present_req"
 TYPE_TIMEOUT_REQ = "timeout_req" 
 TYPE_REDIRECT_REQ = "redirect_req"
 TYPE_UNKNOWN_REQ = "unknown_req"
+TYPE_MORE_INFO_REQ = "need_more_info"
 
 # Настройки модели
 llm_name = "qwen2:72b-instruct-q4_0"
