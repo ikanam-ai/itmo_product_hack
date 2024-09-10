@@ -1,18 +1,8 @@
-from datetime import datetime
-import pandas as pd
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_community.chat_models.ollama import ChatOllama
-import re
-
-TYPE_DND = "dnd" 
-TYPE_DEMO_REQ = "demo_req" 
-TYPE_PRESENTATION_REQ = "present_req"
-TYPE_TIMEOUT_REQ = "timeout_req" 
-TYPE_REDIRECT_REQ = "redirect_req"
-TYPE_UNKNOWN_REQ = "unknown_req"
 
 # Настройки модели
 llm_name = "qwen2:72b-instruct-q4_0"
@@ -46,9 +36,10 @@ system_message = """\
 <system_prompt>
 YOU ARE A CUSTOMER RESPONSE CLASSIFICATION AGENT. YOUR TASK IS TO ANALYZE CLIENT RESPONSES AND CATEGORIZE THEM INTO PREDEFINED CLASSES. EACH CLIENT RESPONSE SHOULD BE MAPPED TO ONE OF THE FIVE RESPONSE CLASSES (1, 3, 4, OR 5), AND FOR EACH RESPONSE, YOU SHOULD ALSO IDENTIFY IF ADDITIONAL INFORMATION IS NEEDED FROM THE CLIENT. YOUR OUTPUT SHOULD BE IN JSON FORMAT AND INCLUDE THE FOLLOWING FIELDS:
 
-1. "response_class": (integer) — THE CLASS OF THE RESPONSE (1, 3, 4, 5).
-2. "need_more_info": (boolean) — TRUE IF ADDITIONAL INFORMATION IS REQUIRED FROM THE CLIENT, OTHERWISE FALSE.
-3. "model_response": (string) — THE APPROPRIATE RESPONSE TO THE CLIENT BASED ON THE PROVIDED EXAMPLES.
+1. "client_response": (string) — THE ORIGINAL CLIENT'S RESPONSE.
+2. "response_class": (integer) — THE CLASS OF THE RESPONSE (1, 3, 4, 5).
+3. "need_more_info": (boolean) — TRUE IF ADDITIONAL INFORMATION IS REQUIRED FROM THE CLIENT, OTHERWISE FALSE.
+4. "model_response": (string) — THE APPROPRIATE RESPONSE TO THE CLIENT BASED ON THE PROVIDED EXAMPLES.
  
 ### Chain of Thoughts:
 
@@ -112,8 +103,8 @@ Expected JSON Output:
 
 ```json
 {
-  "response_class": "5",
-  "need_more_info": "info@tseh85.ru",
+  "response_class": "4",
+  "need_more_info": "false",
   "model_response": "Спасибо за ваш ответ! Мы обязательно направим наше предложение на указанный адрес info@tseh85.ru для рассмотрения коллегами. Будем рады сотрудничеству! С уважением, Команда Napoleon IT. Отзывы"
 }
 ```
@@ -125,8 +116,8 @@ Expected JSON Output:
 
 ```json
 {
-  "response_class": "4",
-  "need_more_info": "16.09.2024",
+  "response_class": "5",
+  "need_more_info": "false",
   "model_response": "Отлично, договорились. Мы можем запланировать демо после 16 сентября. Я передал ваши контакты нашему агенту, и он свяжется с вами в ближайшее время для согласования деталей. Также отправляю вам краткую презентацию для ознакомления. Хорошего отдыха! С уважением, Команда Napoleon IT. Отзывы"
 }
 ```
@@ -138,8 +129,8 @@ Expected JSON Output:
 
 ```json
 {
-  "response_class": "2",
-  "need_more_info": "false",
+  "response_class": "4",
+  "need_more_info": "true",
   "model_response": "Да, конечно! Отправим предложение на почту. Можете тогда прислать контакты коллег, чтобы обсудить детали напрямую? Будем рады сотрудничеству!"
 }
 ```
@@ -187,171 +178,3 @@ def extract_information(text: str) -> dict:
     except Exception as e:
         print(f"Ошибка при обработке: {e}")
         return {"Ошибка": "Не удалось обработать запрос"}
-
-
-
-def generate_incentive_email(name, company_name, products):
-    print(
-        "generate_incentive_email name",
-        name,
-        "company_name",
-        company_name,
-        "products",
-        products,
-    )
-    return "subject incentive", "email incentive"
-
-
-def generate_incentive_tg_mail(name, company_name, products):
-    print(
-        "generate_incentive_tg_mail name",
-        name,
-        "company_name",
-        company_name,
-        "products",
-        products,
-    )
-    return "tg message incentive"
-
-
-def generate_demo_email(name, company_name, message):
-    print(
-        "generate_demo_email name",
-        name,
-        "company_name",
-        company_name,
-        "message",
-        message,
-    )
-
-    if classify_email(message) == 'demo_req':
-        return message.get('model_response'), 'demo_example'
-    return "No demo today", "Demo is not provided!! Ho-Ho"
-
-
-def generate_demo_tg(name, company_name, message):
-    print(
-        "generate_demo_tg name", name, "company_name", company_name, "message", message
-    )
-    if classify_tg_message(message) == 'demo_req':
-        return message.get('model_response'), 'demo_example'
-    return "No demo today", "Demo is not provided!! Ho-Ho"
-
-
-def generate_presentation_email(name, company_name, message):
-    print(
-        "generate_presentation_email name",
-        name,
-        "company_name",
-        company_name,
-        "message",
-        message,
-    )
-    if classify_email(message) == 'present_req':
-        return message.get('model_response'), 'presentation_example'
-    return "No presentation today", "Presentation is not provided!! He-He"
-
-
-def generate_presentation_tg(name, company_name, message):
-    print(
-        "generate_presentation_tg, name",
-        name,
-        "company_name",
-        company_name,
-        "message",
-        message,
-    )
-    if classify_tg_message(message) == 'present_req':
-        return message.get('model_response'), 'presentation_example'
-    return "No presentation today", "Presentation is not provided!! He-He"
-
-
-# def generate_more_info_email(name, company_name, message):
-#     print(
-#         "generate_more_info_email name",
-#         name,
-#         "company_name",
-#         company_name,
-#         "message",
-#         message,
-#     )
-#     return "More info", "Here we keep talking to the client"
-
-
-# def generate_more_info_tg(name, company_name, message):
-#     print(
-#         "generate_more_info_tg name",
-#         name,
-#         "company_name",
-#         company_name,
-#         "message",
-#         message,
-#     )
-#     return "Here we keep talking to the client"
-
-
-def get_timeout_from_msg(message):
-    print("get_timeout_from_msg message", message)
-    date_str = message.get('need_more_info')
-    date_format = "%d.%m.%Y"
-    date_obj = datetime.strptime(date_str, date_format)
-    return date_obj
-
-
-def generate_reminder_email(name, company_name):
-    print("generate_reminder_email name", name, "company_name", company_name)
-    return "Reminder", "You forgot about us!"
-
-
-def generate_reminder_tg(name, company_name):
-    print("generate_reminder_tg name", name, "company_name", company_name)
-    return "You forgot about us!"
-
-
-def classify_email(message, subject):
-    # Извлекаем response_class из сообщения
-    response_class = message.get('response_class')
-    
-    # Если response_class отсутствует, возвращаем TYPE_UNKNOWN_REQ
-    if response_class is None:
-        return TYPE_UNKNOWN_REQ
-    
-    # Определяем тип запроса на основе response_class
-    if response_class == '1':
-        return TYPE_DND
-    elif response_class == '2':
-        return TYPE_DEMO_REQ
-    elif response_class == '3':
-        return TYPE_PRESENTATION_REQ
-    elif response_class == '4':
-        return TYPE_TIMEOUT_REQ
-    elif response_class == '5':
-        return TYPE_REDIRECT_REQ
-    else:
-        # Если response_class не соответствует известным типам
-        return TYPE_UNKNOWN_REQ
-
-
-def classify_tg_message(message):
-    # Извлекаем response_class из сообщения
-    response_class = message.get('response_class')
-    
-    # Если response_class отсутствует, возвращаем TYPE_UNKNOWN_REQ
-    if response_class is None:
-        return TYPE_UNKNOWN_REQ
-    
-    # Определяем тип запроса на основе response_class
-    if response_class == '1':
-        return TYPE_DND
-    elif response_class == '2':
-        return TYPE_DEMO_REQ
-    elif response_class == '3':
-        return TYPE_PRESENTATION_REQ
-    elif response_class == '4':
-        return TYPE_TIMEOUT_REQ
-    elif response_class == '5':
-        return TYPE_REDIRECT_REQ
-    else:
-        # Если response_class не соответствует известным типам
-        return TYPE_UNKNOWN_REQ
-
