@@ -29,8 +29,7 @@ tg_messages_collection_posted = db["tg_messages_posted"]
 tg_messages_collection_received = db["tg_messages_received"]
 
 # Бот
-#telegram_token = os.getenv("TELEGRAM_TOKEN")
-telegram_token = '7198270337:AAHpJrCYCb4lSGo81YFXLK852w7RLQ-oOHA'
+telegram_token = os.getenv("TELEGRAM_TOKEN")
 bot = Bot(token=telegram_token)
 
 
