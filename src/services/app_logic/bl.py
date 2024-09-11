@@ -14,7 +14,7 @@ POLLING_INTERVAL = 5
 PRESENTATION_PATH = "./presentation.pdf"
 PRESENTATION_NAME = "presentation.pdf"
 OUR_NAME = "Rudolf The Advertiser"
-OUR_EMAIL = "dmitry.v.zhelobanov@yandex.ru"
+OUR_EMAIL = "ai-product@yandex.ru"
 
 
 def send_email(db, client, subject, msg, attachment_data=None, attachment_name=None):
