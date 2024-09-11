@@ -12,6 +12,7 @@ from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, parseaddr
+from email.header import decode_header
 
 import pymongo
 
@@ -104,6 +105,15 @@ def send_emails(account, db):
             collection.update_one({"_id": email["_id"]}, {"$set": to_update})
 
 
+def process_header(s):
+    if s.startswith('=?'):
+        print("Encoded", s)
+        s = decode_header(s)[0][0].decode()
+        print("Decoded name", s)
+        return s
+    return s
+
+
 def receive_emails(account, db, mailbox="inbox"):
     print("Receiving emails for account " + account["name"])
     collection = db[EMAIL_TO_RECV_COLLECTION]
@@ -130,15 +140,18 @@ def receive_emails(account, db, mailbox="inbox"):
 
                 message = message_from_bytes(response_part[1])
                 from_addr = parseaddr(message["From"])
+                from_name = process_header(from_addr[0])
                 to_addr = parseaddr(message["To"])
+                to_name = process_header(to_addr[0])
+                subject = process_header(message["Subject"])
                 new_email = {
                     "processed": False,
                     "recv_ts": datetime.now(tz=timezone.utc),
-                    "from": from_addr[0],
+                    "from": from_name,
                     "from_email": from_addr[1],
-                    "to": to_addr[0],
+                    "to": to_name,
                     "to_email": to_addr[1],
-                    "subject": message["Subject"],
+                    "subject": subject,
                 }
                 if message.is_multipart():
                     html_content = ""
@@ -209,7 +222,7 @@ def main():
         account = accounts[0]
 
         try:
-            receive_emails(account, db, mailbox="test")
+            receive_emails(account, db, mailbox="inbox")
             send_emails(account, db)
         except Exception as e:
             print(
