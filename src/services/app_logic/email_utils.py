@@ -1,10 +1,19 @@
-
 EMAIL_TO_SEND_COLLECTION = "send_email"
 EMAIL_TO_RECV_COLLECTION = "recv_email"
 
 
-def post_email(db, from_name, to_name, from_email, to_email, subject, plain_body=None, html_body=None,
-               attachment_data=None, attachment_name="no_name"):
+def post_email(
+    db,
+    from_name,
+    to_name,
+    from_email,
+    to_email,
+    subject,
+    plain_body=None,
+    html_body=None,
+    attachment_data=None,
+    attachment_name="no_name",
+):
 
     collection = db[EMAIL_TO_SEND_COLLECTION]
     email = {
@@ -13,17 +22,14 @@ def post_email(db, from_name, to_name, from_email, to_email, subject, plain_body
         "to": to_name,
         "from_email": from_email,
         "to_email": to_email,
-        "sent": False
+        "sent": False,
     }
     if plain_body:
         email["plain_part"] = plain_body
     if html_body:
         email["html_part"] = html_body
     if attachment_data:
-        email["attachment"] = {
-            "data": attachment_data,
-            "file_name": attachment_name
-        }
+        email["attachment"] = {"data": attachment_data, "file_name": attachment_name}
 
     if not plain_body and not html_body:
         raise Exception("Email must have some body")
@@ -38,8 +44,10 @@ def retrieve_new_email(db):
 
 def mark_email_processed(db, email, process_status):
     collection = db[EMAIL_TO_RECV_COLLECTION]
-    collection.update_one({"_id": email["_id"]},
-                          {"$set": {"processed": True, "process_status": process_status}})
+    collection.update_one(
+        {"_id": email["_id"]},
+        {"$set": {"processed": True, "process_status": process_status}},
+    )
 
 
 # def test_mail_server():

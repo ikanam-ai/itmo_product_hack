@@ -73,3 +73,6 @@ networks:
   host:
     name: host
     external: true
+
+
+# Ниже compose из main branch
