@@ -164,8 +164,9 @@ def main():
             print("Received email:", email)
             clients = list(client_utils.get_clients(db, email=email["from_email"]))
             if len(clients) == 0:
-                print("Can't find client")
+                print("Can't find client", email["from_email"])
                 email_utils.mark_email_processed(db, email, "no client")
+                continue
 
             client = clients[0]
             message = (
@@ -187,8 +188,9 @@ def main():
             print("Received tg_msg:", tg_msg)
             clients = list(client_utils.get_clients(db, tg_id=tg_msg["from"]))
             if len(clients) == 0:
-                print("Can't find client")
+                print("Can't find client", tg_msg["from"])
                 tg_utils.mark_message_processed(db, tg_msg, "no client")
+                continue
 
             client = clients[0]
             message = tg_msg["content"]
