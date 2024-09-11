@@ -651,6 +651,8 @@ def classify_email(message, subject):
         return TYPE_TIMEOUT_REQ
     elif response_class == '5':
         return TYPE_REDIRECT_REQ
+    elif response_class == '7':
+        return TYPE_MORE_INFO_REQ 
     else:
         # Если response_class не соответствует известным типам
         return TYPE_UNKNOWN_REQ
