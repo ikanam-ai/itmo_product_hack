@@ -36,7 +36,7 @@ services:
         volumes:
             - ./app_logic:/app
         network_mode: host
-        container_name: app_Logic
+        container_name: app_logic
         deploy:
             restart_policy:
                 condition: on-failure
