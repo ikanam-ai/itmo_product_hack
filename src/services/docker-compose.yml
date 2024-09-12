@@ -47,6 +47,22 @@ services:
             - MONGO_LLM_HOST
             - MONGO_LLM_INITDB_ROOT_PORT
 
+#    telegram_bot:
+#        build:
+#            context: ./tg_processor
+#            dockerfile: Dockerfile
+#        image: telegram_bot
+#        volumes:
+#            - ./tg_processor:/app
+#        network_mode: host
+#        container_name: telegram_bot
+#        environment:
+#            - TG_BOT_API_HASH
+#        deploy:
+#            restart_policy:
+#                condition: on-failure
+#                delay: 5s
+
 networks:
   host:
     name: host
