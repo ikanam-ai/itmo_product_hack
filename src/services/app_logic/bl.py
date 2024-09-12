@@ -180,26 +180,30 @@ def main():
                 break
 
             print("Received tg_msg:", tg_msg)
-            clients = list(client_utils.get_clients(db, tg_id=tg_msg["from"]))
-            if len(clients) == 0:
-                print("Can't find client", tg_msg["from"])
-                tg_utils.mark_message_processed(db, tg_msg, "no client")
-                continue
+            if "command" in tg_msg and tg_msg["command"] == "/start":
+                print("Creating new client")
+                client_utils.create_new_tg_client(db, tg_msg["tg_id"], tg_msg["username"])
+                tg_utils.mark_message_processed(db, tg_msg, "ok")
+            else:
+                clients = list(client_utils.get_clients(db, tg_id=tg_msg["tg_id"]))
+                if len(clients) == 0:
+                    print("Can't find client", tg_msg["tg_id"])
+                    tg_utils.mark_message_processed(db, tg_msg, "no client")
+                    continue
 
-            client = clients[0]
-            message = tg_msg["content"]
-            tg_cls = ai_utils.classify_tg_message(message)
-            print("tg message class", tg_cls)
+                client = clients[0]
+                message = tg_msg["message"]
+                tg_cls, resp_data = ai_utils.classify_tg_message(message)
+                print("tg message class", tg_cls)
 
-            client_utils.add_message(db, client, message, "in", "tg")
-            tg_utils.mark_message_processed(db, tg_msg, "ok")
+                client_utils.add_message(db, client, message, "in", "tg")
+                tg_utils.mark_message_processed(db, tg_msg, "ok")
+                execute_action(db, client, message, "tg", tg_cls, resp_data)
 
-            execute_action(db, client, message, "tg", tg_cls)
-
-        timeoted_clients = client_utils.get_clients(
+        timeouted_clients = client_utils.get_clients(
             db, status=client_utils.CLIENT_STATUS_TIMEOUT
         )
-        for client in timeoted_clients:
+        for client in timeouted_clients:
             if "deadline" in client and datetime.now() > client["deadline"]:
                 print(
                     "Detected client with passed deadline. Let's remember him about us"

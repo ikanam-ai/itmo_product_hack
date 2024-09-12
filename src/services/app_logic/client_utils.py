@@ -12,6 +12,18 @@ CLIENT_STATUS_DONT_DISTURB = "dont_disturb"
 CLIENT_STATUS_UNKNOWN = "unknown"
 
 
+def create_new_tg_client(db, chat_id, username):
+    collection = db[CLIENTS_COLLECTION_NAME]
+    client = collection.find_one({"tg_id": chat_id, "name": username}, {"_id": 1})
+
+    if client:
+        print("TG client exists, reset the record")
+        reset_client(db, name=username, tg_id=chat_id)
+    else:
+        print("Creating new TG client")
+        create_new_client(db, username, "NoName", "", tg_id=chat_id)
+
+
 def create_new_client(
     db, name, company_name, product_of_interest, email=None, tg_id=None
 ):

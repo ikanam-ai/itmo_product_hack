@@ -216,7 +216,9 @@ def generate_reminder_tg(name, company_name):
 
 
 def get_response_from_date(data):
-    return "Наполеон IT.Отзывы", data.get(RESPONSE_FIELD, "no response")
+    resp = data.get(RESPONSE_FIELD, "no response")
+    resp = resp.replace("\\n", "\n")
+    return "Наполеон IT.Отзывы", resp
 
 
 def get_contacts_from_data(data):

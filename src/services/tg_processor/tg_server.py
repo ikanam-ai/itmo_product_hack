@@ -11,7 +11,7 @@ api_hash = 'hash'
 TG_TO_SEND_COLLECTION = "send_tg"
 TG_TO_RECV_COLLECTION = "recv_tg"
 
-# email structure:
+# tgm structure:
 # message
 # optional attachment { data, file_name }
 # tg_id

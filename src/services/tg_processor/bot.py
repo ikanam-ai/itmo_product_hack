@@ -1,9 +1,20 @@
-import os
+import asyncio
 import logging
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
-from pymongo import MongoClient
-from datetime import datetime
+import sys, os
+from datetime import timezone, datetime
+from os import getenv
+import motor.motor_asyncio as motor
+
+from aiogram import Bot, Dispatcher, html
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.filters import CommandStart
+from aiogram.types import Message
+from aiogram.types import BufferedInputFile
+
+
+TG_TO_SEND_COLLECTION = "send_tg"
+TG_TO_RECV_COLLECTION = "recv_tg"
 
 # Настройка логирования
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
@@ -11,61 +22,112 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
 
 logger = logging.getLogger(__name__)
 
-# Подключение к MongoDB
-mongo_addr = os.getenv("MONGO_HOST", "localhost")
-mongo_port = os.getenv("MONGO_PORT", "27017")
-db_name = os.getenv("DB_NAME", "ai_hack")
-mongo_full_addr = f"mongodb://{mongo_addr}:{mongo_port}/"
-mongo_client = MongoClient(mongo_full_addr)
-db = mongo_client[db_name]
-tg_messages_collection = db["tg_messages"]
+db = None
+# All handlers should be attached to the Router (or Dispatcher)
+dp = Dispatcher()
+bot = Bot(token=getenv("TG_BOT_API_HASH"), default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+
 
 # Функция для записи сообщений в MongoDB
-def save_message(user_id, message, direction, command=None):
-    tg_messages_collection.insert_one({
-        "user_id": user_id,
+async def save_message(user_id, username, message, command=None):
+    print("Received message:", message, "chat_id", user_id, "username", username, "command", command)
+    new_tg = {
+        "tg_id": user_id,
         "message": message,
-        "direction": direction,
-        "command": command,
-        "timestamp": datetime.now()
-    })
+        "username": username,
+        "processed": False,
+        "recv_ts": datetime.now(tz=timezone.utc)
+    }
 
-# Обработчики команд
-async def start(update: Update, context) -> None:
-    user_id = update.message.from_user.id
-    text = "Welcome to the bot! Type /help to see available commands."
-    await update.message.reply_text(text)
-    save_message(user_id, text, "out", "/start")
+    if command:
+        new_tg["command"] = command
 
-async def help_command(update: Update, context) -> None:
-    user_id = update.message.from_user.id
-    text = "Available commands:\\n/start - Start the bot\\n/help - Show this message"
-    await update.message.reply_text(text)
-    save_message(user_id, text, "out", "/help")
+    recv_collection = db[TG_TO_RECV_COLLECTION]
+    await recv_collection.insert_one(new_tg)
 
-# Обработчик простых сообщений
-async def echo(update: Update, context) -> None:
-    user_id = update.message.from_user.id
-    message = update.message.text
-    await update.message.reply_text(message)
-    save_message(user_id, message, "in")
-    save_message(user_id, message, "out")
 
-# Обработка ошибок
-async def error_handler(update: Update, context, error) -> None:
-    logger.error(msg="Exception while handling an update:", exc_info=error)
+async def send_tgs(recv_collection):
+    tgs = recv_collection.find({"sent": False})
+    async for tg in tgs:
+        to_update = {"sent": True}
+        try:
+            dst = tg['tg_id']
+            print(f"Sending TG to: {dst}")
 
-def main() -> None:
-    telegram_token = os.getenv("TELEGRAM_TOKEN")
-    application = ApplicationBuilder().token(telegram_token).build()
+            if "attachment" in tg:
+                attachment = tg["attachment"]
+                print("   Sending file", attachment["file_name"])
+                file = BufferedInputFile(attachment["data"], filename=attachment["file_name"])
+                await bot.send_document(dst, file)
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+            await bot.send_message(dst, tg["message"])
+            to_update["status"] = "ok"
+        except Exception as e:
+            print("Got exception while sending " + str(e))
+            to_update["status"] = "error: " + str(e)
 
-    application.add_error_handler(error_handler)
+        to_update["process_ts"] = datetime.now(tz=timezone.utc)
+        await recv_collection.update_one({"_id": tg["_id"]},
+                                         {"$set": to_update})
 
-    application.run_polling()
 
-if __name__ == '__main__':
-    main()
+@dp.message(CommandStart())
+async def command_start_handler(message: Message) -> None:
+    """
+    This handler receives messages with `/start` command
+    """
+    text = "Welcome to the bot!"
+    await message.answer(text)
+    await save_message(message.chat.id, message.chat.username, text, "/start")
+
+
+@dp.message()
+async def echo_handler(message: Message) -> None:
+    """
+    Handler will forward receive a message back to the sender
+
+    By default, message handler will handle all message types (like a text, photo, sticker etc.)
+    """
+    try:
+        await save_message(message.chat.id, message.chat.username, message.text)
+    except Exception as e:
+        print("Got exception in echo handler", e)
+
+
+async def scheduler(delay: int, poll: int):
+    print("Scheduler started")
+    send_collection = db[TG_TO_SEND_COLLECTION]
+    await asyncio.sleep(delay=delay)
+
+    while True:
+        # for chat_id in chat_ids:
+        print("Scheduler Executed!")
+        try:
+            await send_tgs(send_collection)
+        except Exception as e:
+            print("Exception", e)
+        print("go to sleep")
+        await asyncio.sleep(delay=poll)
+
+
+async def main() -> None:
+    # Initialize Bot instance with default bot properties which will be passed to all API calls
+    global db
+    print("Main started")
+    mongo_addr = os.getenv("MONGO_HOST", "localhost")
+    mongo_port = os.getenv("MONGO_PORT", "27017")
+    db_name = os.getenv("DB_NAME", "ai_hack")
+
+    mongo_full_addr = f"mongodb://{mongo_addr}:{mongo_port}/"
+
+    db_client = motor.AsyncIOMotorClient(mongo_full_addr)
+    db = db_client[db_name]
+
+    task = asyncio.create_task(coro=scheduler(delay=8, poll=5))
+    # And the run events dispatching
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    asyncio.run(main())

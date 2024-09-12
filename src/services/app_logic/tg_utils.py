@@ -41,11 +41,11 @@ def post_message(db, tg_id, msg, attachment_data=None, attachment_name=None):
 #     mongo_client = pymongo.MongoClient(mongo_full_addr)
 #     db = mongo_client[db_name]
 #
-#     #post_message(db, "me", "posted message")
+#     #post_message(db, 5253488934, "posted message")
 #
-#     # with open("presentation.pdf", "rb") as fd:
-#     #     data = Binary(fd.read())
-#     # post_message(db, "me", "msg with attachment", attachment_data=data, attachment_name="attached_file.pdf")
+#     with open("presentation.pdf", "rb") as fd:
+#         data = Binary(fd.read())
+#     post_message(db, 5253488934, "msg with attachment", attachment_data=data, attachment_name="attached_file.pdf")
 #     #
 #     # tg = retrieve_new_tg_message(db)
 #     # print(tg)
