@@ -161,9 +161,9 @@ def receive_emails(account, db, mailbox="inbox"):
                     for part in message.get_payload():
                         part_type = part.get_content_type()
                         if part_type == "text/plain":
-                            plain_content += part.get_payload()
+                            plain_content += part.get_payload(decode=True)
                         elif part_type == "text/html":
-                            html_content += part.get_payload()
+                            html_content += part.get_payload(decode=True)
                         elif part_type == "application/octet-stream":
                             attachment = {
                                 "data": part.get_payload(decode=True),
@@ -179,7 +179,7 @@ def receive_emails(account, db, mailbox="inbox"):
                     if attachment:
                         new_email["attachment"] = attachment
                 else:
-                    new_email["plain_part"] = message.get_payload()
+                    new_email["plain_part"] = message.get_payload(decode=True).decode()
 
                 try:
                     collection.insert_one(new_email)

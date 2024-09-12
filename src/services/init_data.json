@@ -12,10 +12,17 @@
           "smtp_port": 465,
           "imap_server": "imap.yandex.ru",
           "imap_port": 993,
-          "login": "",
-          "password": ""
+          "login": "ai-product@yandex.ru",
+          "password": "hakmyncouvcxxyli"
         }
       ]
     }
-  ]
+  ],
+  "env" : {
+    "MONGO_LLM_INITDB_ROOT_USERNAME": "",
+    "MONGO_LLM_INITDB_ROOT_PASSWORD": "",
+    "MONGO_LLM_HOST": "",
+    "MONGO_LLM_INITDB_ROOT_PORT": "",
+    "TG_BOT_API_HASH": ""
+  }
 }

@@ -36,6 +36,10 @@ env_content = [
     ("DB_NAME", db_name),
 ]
 
+if "env" in data:
+    for key in data["env"]:
+        env_content.append((key, data["env"][key]))
+
 with open(".env", "w") as fd:
     for var in env_content:
         line = var[0] + '="' + str(var[1]) + '"\n'

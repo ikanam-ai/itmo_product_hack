@@ -179,6 +179,33 @@ def mark_client_unknown_response(db, client, to):
     )
 
 
+def reset_client(db, name=None, company_name=None, email=None, tg_id=None):
+    query = {}
+    if name:
+        query["name"] = name
+    if company_name:
+        query["company_name"] = company_name
+    if email:
+        query["email"] = email
+    if tg_id:
+        query["tg_id"] = tg_id
+
+    if len(query) == 0:
+        raise Exception("Can't retrieve unspecified client")
+
+    res = db[CLIENTS_COLLECTION_NAME].find_one(query, {"_id": 1})
+    if res is None:
+        print("Can't find requested client")
+
+    db[CLIENTS_COLLECTION_NAME].update_one({"_id": res["_id"]},
+                                           {
+                                               "$set": {
+                                                   "status": CLIENT_STATUS_NEW,
+                                                   "updated": datetime.now(tz=timezone.utc),
+                                               }
+                                           })
+
+
 if __name__ == "__main__":
     import pymongo
     from bson import json_util
@@ -186,7 +213,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="ClientCLI", description="Client base command line utility"
     )
-    parser.add_argument("cmd", choices=["add", "get"])
+    parser.add_argument("cmd", choices=["add", "get", "reset"])
     parser.add_argument("--name", type=str, help="Client name")
     parser.add_argument("--company_name", type=str, help="Company name")
     parser.add_argument("--email", type=str, help="Client's email")
@@ -227,6 +254,13 @@ if __name__ == "__main__":
     if args.cmd == "add":
         create_new_client(
             db, args.name, args.company_name, args.products, args.email, args.tg_id
+        )
+    elif args.cmd == "reset":
+        clients = reset_client(db,
+            name=args.name,
+            company_name=args.company_name,
+            email=args.email,
+            tg_id=args.tg_id,
         )
     elif args.cmd == "get":
         clients = get_clients(

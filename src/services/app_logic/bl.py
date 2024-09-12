@@ -13,7 +13,7 @@ from bson.binary import Binary
 POLLING_INTERVAL = 5
 PRESENTATION_PATH = "./presentation.pdf"
 PRESENTATION_NAME = "presentation.pdf"
-OUR_NAME = "Rudolf The Advertiser"
+OUR_NAME = "Роман"
 OUR_EMAIL = "ai-product@yandex.ru"
 
 
@@ -25,7 +25,7 @@ def send_email(db, client, subject, msg, attachment_data=None, attachment_name=N
         OUR_EMAIL,
         client["email"],
         subject,
-        html_body=msg,
+        plain_body=msg,
         attachment_data=attachment_data,
         attachment_name=attachment_name,
     )
@@ -45,7 +45,7 @@ def send_tg(db, client, msg, attachment_data=None, attachment_name=None):
     client_utils.mark_client_message_sent(db, client, "tg")
 
 
-def execute_action(db, client, message, msg_type, msg_cls):
+def execute_action(db, client, message, msg_type, msg_cls, response_data):
     if msg_cls == ai_utils.TYPE_DND:
         print("Client asked to DND")
         client_utils.mark_client_do_not_disturb(db, client)
@@ -67,11 +67,7 @@ def execute_action(db, client, message, msg_type, msg_cls):
             data = Binary(fd.read())
 
         if msg_type == "email":
-            subject, msg = ai_utils.generate_presentation_email(
-                client["name"],
-                client["company_name"],
-                message,
-            )
+            subject, msg = ai_utils.get_response_from_date(response_data)
             send_email(
                 db,
                 client,
@@ -81,32 +77,30 @@ def execute_action(db, client, message, msg_type, msg_cls):
                 attachment_name=PRESENTATION_NAME,
             )
         else:
-            msg = ai_utils.generate_presentation_tg(
-                client["name"],
-                client["company_name"],
-                message,
-            )
+            _, msg = ai_utils.get_response_from_date(response_data)
             send_tg(
                 db, client, msg, attachment_data=data, attachment_name=PRESENTATION_NAME
             )
     elif msg_cls == ai_utils.TYPE_MORE_INFO_REQ:
         print("Client asked for more info")
         if msg_type == "email":
-            subject, msg = ai_utils.generate_more_info_email(
-                client["name"], client["company_name"], message
-            )
+            subject, msg = ai_utils.get_response_from_date(response_data)
             send_email(db, client, subject, msg)
         else:
-            msg = ai_utils.generate_more_info_tg(
-                client["name"], client["company_name"], message
-            )
+            _, msg = ai_utils.get_response_from_date(response_data)
             send_tg(db, client, msg)
     elif msg_cls == ai_utils.TYPE_TIMEOUT_REQ:
-        timeout = ai_utils.get_timeout_from_msg(message)
+        timeout = ai_utils.get_timeout_from_msg(response_data)
         client_utils.mark_client_got_timeout(db, client, timeout)
     elif msg_cls == ai_utils.TYPE_REDIRECT_REQ:
         print("Automatic redirection is not implemented!!!!!!")
-        client_utils.mark_client_redirected(db, client, "Unknown")
+        if msg_type == "email":
+            subject, msg = ai_utils.get_response_from_date(response_data)
+            send_email(db, client, subject, msg)
+        else:
+            _, msg = ai_utils.get_response_from_date(response_data)
+            send_tg(db, client, msg)
+        client_utils.mark_client_redirected(db, client, ai_utils.get_contacts_from_data(response_data))
     elif msg_cls == ai_utils.TYPE_UNKNOWN_REQ:
         print("We have no Idea what the message is about. Manual processing?")
         client_utils.mark_client_unknown_response(db, client, "Unknown")
@@ -172,13 +166,13 @@ def main():
             message = (
                 email["html_part"] if "html_part" in email else email["plain_part"]
             )
-            email_cls = ai_utils.classify_email(message, email["subject"])
+            email_cls, response = ai_utils.classify_email(message, email["subject"])
             print("email class", email_cls)
 
             client_utils.add_message(db, client, message, "in", "email")
             email_utils.mark_email_processed(db, email, email_cls)
 
-            execute_action(db, client, message, "email", email_cls)
+            execute_action(db, client, message, "email", email_cls, response)
 
         while True:
             tg_msg = tg_utils.retrieve_new_tg_message(db)

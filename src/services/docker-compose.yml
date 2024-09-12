@@ -41,6 +41,11 @@ services:
             restart_policy:
                 condition: on-failure
                 delay: 5s
+        environment:
+            - MONGO_LLM_INITDB_ROOT_USERNAME
+            - MONGO_LLM_INITDB_ROOT_PASSWORD
+            - MONGO_LLM_HOST
+            - MONGO_LLM_INITDB_ROOT_PORT
 
 networks:
   host:
