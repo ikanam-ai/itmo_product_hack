@@ -5,7 +5,72 @@ from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplat
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_community.chat_models.ollama import ChatOllama
+
+from pymongo import MongoClient
+import uuid
+from dotenv import load_dotenv
+
 import re
+import os
+import time
+
+load_dotenv()
+
+
+MONGO_USERNAME = os.getenv('MONGO_INITDB_ROOT_USERNAME')
+MONGO_PASSWORD = os.getenv('MONGO_INITDB_ROOT_PASSWORD')
+MONGO_HOST = os.getenv('MONGO_HOST')
+MONGO_PORT = os.getenv('MONGO_INITDB_ROOT_PORT')
+
+mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+client = MongoClient(mongo_uri)
+db = client['llm_database']
+collection = db['dataset_ai']
+
+
+def add_task(task_data, model):
+    task = {
+        "model": model,
+        "prompt": task_data['prompt'],
+        "status": "pending",
+        "response": None
+    }
+    task.update(task_data)  
+    result = collection.insert_one(task)
+    print(f"Added task with id: {result.inserted_id}")
+    return result.inserted_id
+
+
+def wait_for_task_completion(task_id, timeout=300, check_interval=5):
+    """
+    Ожидает завершения задачи в течение заданного времени.
+    
+    :param task_id: ID задачи в базе данных
+    :param timeout: Максимальное время ожидания (в секундах)
+    :param check_interval: Интервал проверки статуса задачи (в секундах)
+    :return: Результат выполнения задачи или сообщение об ошибке
+    """
+    start_time = time.time()
+    
+    while time.time() - start_time < timeout:
+        # Поиск задачи по ID в коллекции
+        task = collection.find_one({"_id": task_id})
+        
+        if task:
+            status = task.get('status')
+            if status == 'completed':
+                # Забираем response при завершении
+                return task.get('response')
+            elif status == 'failed':
+                return {"Ошибка": "Задача завершилась с ошибкой"}
+        else:
+            return {"Ошибка": "Задача не найдена"}
+        
+        # Ждем перед следующей проверкой
+        time.sleep(check_interval)
+    
+    return {"Ошибка": "Превышено время ожидания завершения задачи"}
+
 
 TYPE_DND = "dnd" 
 TYPE_DEMO_REQ = "demo_req" 
@@ -14,6 +79,8 @@ TYPE_TIMEOUT_REQ = "timeout_req"
 TYPE_REDIRECT_REQ = "redirect_req"
 TYPE_UNKNOWN_REQ = "unknown_req"
 TYPE_MORE_INFO_REQ = "need_more_info"
+
+
 
 # Настройки модели
 llm_name = "qwen2:72b-instruct-q4_0"
@@ -30,11 +97,15 @@ llm = ChatOllama(
 )
 class DataExtractionSchema(BaseModel):
     response_class: str = Field()
+    date: str = Field()
+    contacts: str = Field()
     need_more_info: str = Field()
     model_response: str = Field()
 
 class OutputSchema(BaseModel):
     response_class: str
+    date: str
+    contacts: str
     need_more_info: str
     model_response: str
 
@@ -155,7 +226,7 @@ Expected JSON Output:
 ```json
 {
   "response_class": "4",
-  "date": "2024-09-16",
+  "date": "16-09-2024",
   "contacts": null,
   "need_more_info": false,
   "model_response": "Отлично, договорились. Мы можем запланировать демо после 16 сентября. Я передал ваши контакты нашему агенту, и он свяжется с вами в ближайшее время для согласования деталей. Также отправляю вам краткую презентацию для ознакомления. Хорошего отдыха! С уважением, Команда Napoleon IT. Отзывы"
@@ -482,6 +553,13 @@ Client response: "Какие в среднем показатели по асс�
 2. **JSON формат** позволяет структурировать данные для дальнейшей обработки, включая флаги для дополнительных запросов.
 3. Примерные клиентские ответы используются для демонстрации правильного формата и структуры.
 
+ГОД ВСЕГДА 2024
+Название компании: tasty_coffee 
+Распределение настроения отзывов на продукты компании в долях: {'Positive': 0.75, 'Negative': 0.21, 'Neutral': 0.04} 
+Какие маркетплейсы фигурируют в собранных отзывах компании: ['Ozon'] 
+Топ 5 самых популярных товаров по отзывам (формат "название продукта": количество отзывов в данных о компании): {'Дрип кофе Tasty Coffee Бэрри, 10 шт. по 11,5 г': 457, 'Дрип кофе Tasty Coffee Бэрри, 30 шт. по 11,5 г': 255, 'Дрип кофе Tasty Coffee Drip Mix, 20 шт. по 11,5 г': 244, 'Кофе в зернах Tasty Coffee Натти, 250 г': 239, 'Кофе в зернах Tasty Coffee Бразилия Серрадо, 250 г': 211} 
+Товар с наибольшим отношением позитивных отзывов  Название товара: Кофе в зернах Tasty Coffee Натти, 1000 г, Отношение позитивных отзывов ко всем (в процентах): 89.36%, Всего отзывов о данном товаре: 188 
+Товар с наибольшим отношением негативных отзывов  Название товара: Кофе в зернах Tasty Coffee Колумбия Богота, 250 г, Отношение негативных отзывов ко всем (в процентах): 36.1%, Всего отзывов о данном товаре: 205
 
 Output schema:
 {OutputSchema.schema()}
@@ -505,8 +583,14 @@ chat_prompt_template = ChatPromptTemplate.from_messages(
 chain = chat_prompt_template | llm | JsonOutputParser()
 
 def extract_information(text: str) -> dict:
+    model = 'qwen2:72b-instruct-q4_0'
     try:
-        result = chain.invoke({"input": text})
+        # Добавляем задачу в базу
+        task_id = add_task({"prompt": text}, model)
+        
+        # Ожидаем завершения задачи и забираем результат
+        result = wait_for_task_completion(task_id)
+        
         return result
     except Exception as e:
         print(f"Ошибка при обработке: {e}")
@@ -616,8 +700,8 @@ def generate_presentation_tg(name, company_name, message):
 
 def get_timeout_from_msg(message):
     print("get_timeout_from_msg message", message)
-    date_str = message.get('need_more_info')
-    date_format = "%d.%m.%Y"
+    date_str = message.get('date')
+    date_format = "%d-%m-%Y"
     date_obj = datetime.strptime(date_str, date_format)
     return date_obj
 
@@ -682,4 +766,3 @@ def classify_tg_message(message):
     else:
         # Если response_class не соответствует известным типам
         return TYPE_UNKNOWN_REQ
-
