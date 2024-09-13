@@ -602,7 +602,7 @@ Client response: "Покажи мне данные по продукту Tasty C
   "date": null,
   "contacts": null,
   "need_more_info": true,
-  "need_image": true,
+  "need_image": "Кофе в зернах Tasty Coffee Бразилия Можиана, 250 г_Общая удовлетворенность.jpg",
   "model_response": "Вывожу график по продукту Кофе в зернах Tasty Coffee Бразилия Можиана, 250 г и топику: Общая удовлетворенность."
 }
 ```
@@ -618,7 +618,7 @@ Client response: "Какие данные по товару Дрип кофе Ta
   "date": null,
   "contacts": null,
   "need_more_info": true,
-  "need_image": true,
+  "need_image": "Дрип кофе Tasty Coffee Бэрри, 10 шт. по 11,5 г_Вкус.jpg",
   "model_response": "Вывожу аналитику по продукту Дрип кофе Tasty Coffee Бэрри, 10 шт. по 11,5 г по топику: Вкус за период. Если хотите посмотреть в разрезе других продуктов и топиков, то напишите в сообщении продукт и топик."
 }
 ```
