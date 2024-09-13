@@ -3,6 +3,14 @@
 
 # Проект: Napoleon IT Sales агент для сервиса "Отзывы" 
 
+## Архитектура решения
+
+<img src="extensions/architecture.jpg" alt="Архитектура решения" width="1000" height="500">
+
+## Схема работы сервиса
+
+<img src="extensions/service.jpg" alt="Схема работы сервиса" width="800" height="250">
+
 **Система состоит из следующих серверов:**
 * MongoDB
 * Сервер бизнес логики и аналитики
