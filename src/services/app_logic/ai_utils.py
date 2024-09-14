@@ -6,6 +6,9 @@ from pymongo import MongoClient
 RESPONSE_FIELD = 'model_response'
 CLASS_FIELD = 'response_class'
 CONTACTS_FIELD = 'contacts'
+ATTACHMENT_FIELD = "need_image"
+
+IMAGE_FOLDER = "info_images"
 
 # as we didn't get resources for GPU on Yandex cloud, we host the model (see model.py) on our own infrastructure
 LLM_MONGO_USERNAME = os.getenv('MONGO_LLM_INITDB_ROOT_USERNAME')
@@ -219,6 +222,22 @@ def get_response_from_date(data):
     resp = data.get(RESPONSE_FIELD, "no response")
     resp = resp.replace("\\n", "\n")
     return "Наполеон IT.Отзывы", resp
+
+
+def get_response_attachment(response_data):
+    attachment_name = response_data.get(ATTACHMENT_FIELD, None)
+    if attachment_name:
+        try:
+            f_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), IMAGE_FOLDER, attachment_name)
+            if os.path.exists(f_path):
+                with open(f_path, "rb") as fd:
+                    attachment_content = fd.read()
+
+                return attachment_content, attachment_name
+        except Exception as e:
+            print("Got exception in get_response_attachment", e)
+
+    return None, None
 
 
 def get_contacts_from_data(data):

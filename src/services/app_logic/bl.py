@@ -83,12 +83,13 @@ def execute_action(db, client, message, msg_type, msg_cls, response_data):
             )
     elif msg_cls == ai_utils.TYPE_MORE_INFO_REQ:
         print("Client asked for more info")
+        attachment_data, attachment_name = ai_utils.get_response_attachment(response_data)
         if msg_type == "email":
             subject, msg = ai_utils.get_response_from_date(response_data)
-            send_email(db, client, subject, msg)
+            send_email(db, client, subject, msg, attachment_data, attachment_name)
         else:
             _, msg = ai_utils.get_response_from_date(response_data)
-            send_tg(db, client, msg)
+            send_tg(db, client, msg, attachment_data, attachment_name)
     elif msg_cls == ai_utils.TYPE_TIMEOUT_REQ:
         timeout = ai_utils.get_timeout_from_msg(response_data)
         client_utils.mark_client_got_timeout(db, client, timeout)
